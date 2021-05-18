@@ -1,0 +1,10 @@
+CMSC388V - Final project
+
+This is a bitcrusher effect plugin that works with all LADSPA compatible interfaces. 
+
+To install, clone the repository and use:
+
+gcc -shared -fPIC -o bitcrusher.so bitcrusher.c -lm
+install -m755 bitcrusher.so /usr/lib/ladspa
+
+Special thanks to Steve Harris' LADSPA plugins, whose Decimator has a hacky, yet intuitive sample reduction algorithm.

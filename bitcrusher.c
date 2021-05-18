@@ -7,10 +7,7 @@
 #include "ladspa.h"
 #define NPORTS 4
 
-
-
-
-
+//defining ports
 enum PortIndex {
   INPUT = 0,
   OUTPUT = 1,
@@ -18,6 +15,7 @@ enum PortIndex {
   BIT_DEPTH = 3, 
 };
 
+//port settings
 static const LADSPA_PortDescriptor
 port_descriptors[NPORTS] = {
   [INPUT] = LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO,
@@ -27,14 +25,16 @@ port_descriptors[NPORTS] = {
 
 };
 
+//naming ports
 static const char *
 port_names[NPORTS] = {
   [INPUT] = "In",
   [OUTPUT]  = "Out",
-  [SAMPLE_RATE] = "Frequency (kHz)",
-  [BIT_DEPTH] = "Resolution (bits)"
+  [SAMPLE_RATE] = "Frequency (kHz) - sample rate",
+  [BIT_DEPTH] = "Resolution (bits) - bit depth"
 };
 
+//port input hints (useful for a UI interfaces)
 static const LADSPA_PortRangeHint
 port_hints[NPORTS] = {
   [INPUT] = {
@@ -50,30 +50,33 @@ port_hints[NPORTS] = {
                        LADSPA_HINT_SAMPLE_RATE   |
                        LADSPA_HINT_LOGARITHMIC   |
                        LADSPA_HINT_DEFAULT_MIDDLE),
-    .LowerBound = 0,
-    .UpperBound = 0.5
+    .LowerBound = 0.001,
+    .UpperBound = 1
   },
   [BIT_DEPTH] = {
     .HintDescriptor = (LADSPA_HINT_BOUNDED_BELOW |
                        LADSPA_HINT_BOUNDED_ABOVE |
-                       LADSPA_HINT_LOGARITHMIC   |
+                       LADSPA_HINT_INTEGER		 |
                        LADSPA_HINT_DEFAULT_MIDDLE),
     .LowerBound = 0,
     .UpperBound = 24
   },
 };
 
-
+//defining the data in each instance of a Bitcrusher
 typedef struct {
   const LADSPA_Data *bit_depth;
-  const LADSPA_Data *sample_rate;
+  const LADSPA_Data *new_sample_rate;
   
   LADSPA_Data *out;
   LADSPA_Data *in;
 
+  int count;
+  LADSPA_Data last_out; 
   unsigned long sr;
 } Bitcrusher;
 
+//allocating space for an instance of a Bitcrusher
 static LADSPA_Handle
 instantiate(const LADSPA_Descriptor *descriptor,
             unsigned long sr)
@@ -84,24 +87,28 @@ instantiate(const LADSPA_Descriptor *descriptor,
   if (!bc)
     return NULL;
 
+  bc->count = 0.0f;
+  bc->last_out = 0.0f;
   bc->sr = sr;
 
   return bc;
 }
 
+//freeing Bitcrusher space
 static void
 cleanup(LADSPA_Handle instance)
 {
   free(instance);
 }
 
-
+//assigning the instance
 static void
 activate(LADSPA_Handle instance)
 {
   Bitcrusher *bc = instance;
 }
 
+//connecting each of the ports
 static void
 connect_port(LADSPA_Handle instance,
              unsigned long port, LADSPA_Data *data)
@@ -119,11 +126,14 @@ connect_port(LADSPA_Handle instance,
     bc->bit_depth = data;
     break;
   case SAMPLE_RATE:
-    bc->sample_rate = data;
+    bc->new_sample_rate = data;
     break;
   }
 }
 
+#define ROUND(f) ((float)((f > 0.0) ? floor(f + 0.5) : ceil(f - 0.5)))
+
+//callback function that applies the effect to each input sample
 static void
 run(LADSPA_Handle instance, unsigned long nsamples)
 {
@@ -131,18 +141,51 @@ run(LADSPA_Handle instance, unsigned long nsamples)
   Bitcrusher *bc = instance;
 
   const LADSPA_Data bit_depth = *(bc->bit_depth);
+  const LADSPA_Data new_sample_rate = *(bc->new_sample_rate);
   LADSPA_Data *in = bc->in;
   LADSPA_Data *out = bc->out;
-  double sr = bc->sr;
+
+
+  float count = 0.0f;
+  float last_out = 0.0f;
+  float step, stepr, delta;
+
+
+
+  double temp;
+
+
+  step = pow(0.5f, (float)bit_depth - 0.999f);
+  stepr = 1.0f/(float)bit_depth;
+
+  float ratio;
+  if (new_sample_rate >= bc->sr) {
+  	ratio = 1.0f;
+  } else {
+  	ratio = (float)new_sample_rate / (float)bc->sr;
+  }
+
 
   for (i = 0; i < nsamples; i++) {
-    out[i] = in[i];
+	count += ratio;
+	if (count >= 1.0f) {
+		count -= 1.0f;
+		delta = modf((in[i] + (in[i] < 0 ? -1.0f : 1.0f) * step * 0.5f) * stepr, &temp) * step;
+		last_out = in[i] - delta;
+
+		//write to the buffer
+		out[i] = last_out;
+	} else {
+		//somehow only going down this path
+		out[i] = last_out;
+	}
   }
 
 }
 
 
-
+ 
+//
 static const LADSPA_Descriptor
 descriptor = {
   .UniqueID = 1111,
