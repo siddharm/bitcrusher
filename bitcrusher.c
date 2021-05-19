@@ -34,7 +34,7 @@ port_names[NPORTS] = {
   [BIT_DEPTH] = "Resolution (bits) - bit depth"
 };
 
-//port input hints (useful for a UI interfaces)
+//port input hints (useful for a UI interface)
 static const LADSPA_PortRangeHint
 port_hints[NPORTS] = {
   [INPUT] = {
@@ -46,20 +46,20 @@ port_hints[NPORTS] = {
 
   [SAMPLE_RATE] = {
     .HintDescriptor = (LADSPA_HINT_BOUNDED_BELOW |
-                       LADSPA_HINT_BOUNDED_ABOVE |
-                       LADSPA_HINT_SAMPLE_RATE   |
-                       LADSPA_HINT_LOGARITHMIC   |
-                       LADSPA_HINT_DEFAULT_MIDDLE),
+     LADSPA_HINT_BOUNDED_ABOVE |
+     LADSPA_HINT_SAMPLE_RATE   |
+     LADSPA_HINT_LOGARITHMIC   |
+     LADSPA_HINT_DEFAULT_MIDDLE),
     .LowerBound = 0.001,
     .UpperBound = 1
   },
   [BIT_DEPTH] = {
     .HintDescriptor = (LADSPA_HINT_BOUNDED_BELOW |
-                       LADSPA_HINT_BOUNDED_ABOVE |
-                       LADSPA_HINT_INTEGER		 |
-                       LADSPA_HINT_DEFAULT_MIDDLE),
+     LADSPA_HINT_BOUNDED_ABOVE |
+     LADSPA_HINT_INTEGER		 |
+     LADSPA_HINT_DEFAULT_MIDDLE),
     .LowerBound = 0,
-    .UpperBound = 24
+    .UpperBound = 32
   },
 };
 
@@ -79,7 +79,7 @@ typedef struct {
 //allocating space for an instance of a Bitcrusher
 static LADSPA_Handle
 instantiate(const LADSPA_Descriptor *descriptor,
-            unsigned long sr)
+  unsigned long sr)
 {
   Bitcrusher* bc;
 
@@ -111,21 +111,21 @@ activate(LADSPA_Handle instance)
 //connecting each of the ports
 static void
 connect_port(LADSPA_Handle instance,
-             unsigned long port, LADSPA_Data *data)
+ unsigned long port, LADSPA_Data *data)
 {
   Bitcrusher *bc = instance;
 
   switch (port) {
-  case INPUT:
+    case INPUT:
     bc->in = data;
     break;
-  case OUTPUT:
+    case OUTPUT:
     bc->out = data;
     break;
-  case BIT_DEPTH:
+    case BIT_DEPTH:
     bc->bit_depth = data;
     break;
-  case SAMPLE_RATE:
+    case SAMPLE_RATE:
     bc->new_sample_rate = data;
     break;
   }
@@ -145,18 +145,16 @@ run(LADSPA_Handle instance, unsigned long nsamples)
   LADSPA_Data *in = bc->in;
   LADSPA_Data *out = bc->out;
 
-
   float count = 0.0f;
   float last_out = 0.0f;
   float step, stepr, delta;
 
-
-
   double temp;
-
 
   step = pow(0.5f, (float)bit_depth - 0.999f);
   stepr = 1.0f/(float)bit_depth;
+
+  float max = pow(2.0f, bit_depth) - 1;
 
   float ratio;
   if (new_sample_rate >= bc->sr) {
@@ -167,25 +165,32 @@ run(LADSPA_Handle instance, unsigned long nsamples)
 
 
   for (i = 0; i < nsamples; i++) {
-	count += ratio;
-	if (count >= 1.0f) {
-		count -= 1.0f;
-		delta = modf((in[i] + (in[i] < 0 ? -1.0f : 1.0f) * step * 0.5f) * stepr, &temp) * step;
-		last_out = in[i] - delta;
+  count += ratio;
 
-		//write to the buffer
-		out[i] = last_out;
-	} else {
-		//somehow only going down this path
-		out[i] = last_out;
-	}
+    //this loop keeps duplicates output values for the given frequency reduction rate, using count as a flag for when to switch
+    if (count >= 1.0f) {
+      count -= 1.0f;
+
+      //here, we modify the bit depth
+      //the value of the sample is transposed and rounded to fit into range
+
+      //check if its in the negative half of the range
+      float sign = 1.0f;
+      if (in[i] < 0) {
+        sign = -1.0f;
+      }
+
+      //take the integer part (analogous to rounding)
+      delta = modf((in[i] + sign * step * 0.5f) * stepr, &temp) * step;
+      last_out = in[i] - delta;
+      out[i] = last_out;
+
+    } else {
+      out[i] = last_out;
+    }
   }
-
 }
 
-
- 
-//
 static const LADSPA_Descriptor
 descriptor = {
   .UniqueID = 1111,
@@ -207,7 +212,6 @@ descriptor = {
   .cleanup = cleanup
 };
 
-//LADSPA_SYMBOL_EXPORT;
 const LADSPA_Descriptor *
 ladspa_descriptor(unsigned long index)
 {

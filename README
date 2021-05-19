@@ -7,4 +7,6 @@ To install, clone the repository and use:
 gcc -shared -fPIC -o bitcrusher.so bitcrusher.c -lm
 install -m755 bitcrusher.so /usr/lib/ladspa
 
-Special thanks to Steve Harris' LADSPA plugins, whose Decimator has a hacky, yet intuitive sample reduction algorithm.
+Special thanks to:
+- Steve Harris' LADSPA plugins, whose Decimator has an intuitive sample reduction algorithm.
+- My friend Jared for giving me guitar clips to test with
