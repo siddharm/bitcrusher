@@ -9,4 +9,4 @@ install -m755 bitcrusher.so /usr/lib/ladspa
 
 Special thanks to:
 - Steve Harris' LADSPA plugins, whose Decimator has an intuitive sample reduction algorithm.
-- My friend Jared for giving me guitar clips to test with
+- My friend Jared for giving me guitar clips to test with.
